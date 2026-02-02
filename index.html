@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Elite - App</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Dependencias de React (Versiones estables) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- PropTypes (Obligatorio para Recharts en navegador) -->
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    <!-- Recharts -->
+    <script src="https://unpkg.com/recharts@2.10.3/umd/Recharts.js"></script>
+    <!-- Babel para JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { 
+            font-family: 'Inter', sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+            background-color: #f8fafc;
+            margin: 0;
+        }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        #loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            background: #ffffff; z-index: 9999; transition: opacity 0.5s;
+        }
+    </style>
+</head>
+<body>
+    <!-- Indicador de carga inicial -->
+    <div id="loader">
+        <div class="flex flex-col items-center gap-4">
+            <div class="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-slate-400 text-sm font-medium animate-pulse">Iniciando Finance Elite...</p>
+        </div>
+    </div>
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+        const { 
+            PieChart, Pie, Cell, ResponsiveContainer, 
+            XAxis, YAxis, Tooltip, Legend, BarChart, Bar, CartesianGrid, LabelList 
+        } = Recharts;
+
+        // Definición global de formato
+        const fmt = (val) => {
+            const num = parseFloat(val) || 0;
+            return num.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
+        };
+
+        const Icons = {
+            Wallet: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>,
+            Piggy: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1 .5-1.5 1-2V5Z"/><path d="M12 2v4"/></svg>,
+            Loans: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m11 15-3-3 3-3"/><path d="m15 9 3 3-3 3"/><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M12 5v14"/></svg>,
+            Plus: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+            Trash: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
+            Cloud: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.5 19c2.5 0 4.5-2 4.5-4.5 0-2-1.3-3.7-3.1-4.2C18.4 6.2 14.8 3 10.5 3 6.7 3 3.5 5.5 2.4 9 1 9.9 0 11.5 0 13.3c0 2 1.6 3.7 3.6 3.7h13.9Z"/></svg>,
+            Tag: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>,
+            Smartphone: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>,
+            Monitor: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        };
+
+        const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const TAGS = ['Belleza', 'Salidas', 'Efectivo', 'Compras', 'Uber', 'Comida'];
+        const COLORS = ['#6366f1', '#db2777', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6'];
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('Enero');
+            const [isMobileMode, setIsMobileMode] = useState(false);
+            const [showMonthSelector, setShowMonthSelector] = useState(false);
+            const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('finance_url') || '');
+            const [syncStatus, setSyncStatus] = useState('idle');
+
+            const [data, setData] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('finance_data');
+                    if (saved) return JSON.parse(saved);
+                } catch (e) { console.error("Error cargando datos", e); }
+                
+                return {
+                    config: { pNec: 50, pDes: 30, pAho: 20 },
+                    loans: [],
+                    monthly: MONTHS.reduce((acc, month) => {
+                        acc[month] = { salario: 0, entradas: 0, mesPasado: 0, prestado: 0, ahorroManual: 0, gastosFijos: [], gastosVariables: [] };
+                        return acc;
+                    }, {})
+                };
+            });
+
+            useEffect(() => {
+                // Quitar el cargador una vez que React esté listo
+                const loader = document.getElementById('loader');
+                if (loader) loader.style.opacity = '0';
+                setTimeout(() => loader && loader.remove(), 500);
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('finance_data', JSON.stringify(data));
+            }, [data]);
+
+            const updateMonth = (m, f, v) => setData(p => ({...p, monthly: {...p.monthly, [m]: {...p.monthly[m], [f]: parseFloat(v) || 0}}}));
+            const updateConfig = (f, v) => setData(p => ({...p, config: {...p.config, [f]: parseInt(v) || 0}}));
+            const addLoan = (n, m) => setData(p => ({...p, loans: [{id:Date.now(),nombre:n,monto:parseFloat(m),pagado:false,fecha:new Date().toLocaleDateString()}, ...p.loans]}));
+            const toggleLoan = (id) => setData(p => ({...p, loans: p.loans.map(l => l.id === id ? {...l, pagado: !l.pagado} : l)}));
+            const deleteLoan = (id) => setData(p => ({...p, loans: p.loans.filter(l => l.id !== id)}));
+            const addGasto = (m, t) => setData(p => ({...p, monthly: {...p.monthly, [m]: {...p.monthly[m], [t]: [...p.monthly[m][t], {id:Date.now(),nombre:'',valor:0,tag:TAGS[0]}]}}}));
+            const updateGasto = (m, t, id, f, v) => setData(p => ({...p, monthly: {...p.monthly, [m]: {...p.monthly[m], [t]: p.monthly[m][t].map(i => i.id === id ? {...i, [f]: f==='valor'?parseFloat(v)||0:v} : i)}}}));
+            const deleteGasto = (m, t, id) => setData(p => ({...p, monthly: {...p.monthly, [m]: {...p.monthly[m], [t]: p.monthly[m][t].filter(i => i.id !== id)}}}));
+
+            const cur = data.monthly[activeTab] || {};
+            const ing = (cur.salario || 0) + (cur.entradas || 0) + (cur.mesPasado || 0) + (cur.prestado || 0);
+            const base = Math.max(0, ing - (cur.ahorroManual || 0));
+            const vNec = base * (data.config.pNec / 100);
+            const vDes = base * (data.config.pDes / 100);
+            const vAho = base * (data.config.pAho / 100);
+            const gFij = cur.gastosFijos?.reduce((s, g) => s + (parseFloat(g.valor) || 0), 0) || 0;
+            const gVar = cur.gastosVariables?.reduce((s, g) => s + (parseFloat(g.valor) || 0), 0) || 0;
+            const disp = (vNec + vDes) - (gFij + gVar);
+
+            const savings = MONTHS.map(m => {
+                const d = data.monthly[m];
+                const i = (d.salario || 0) + (d.entradas || 0) + (d.mesPasado || 0) + (d.prestado || 0);
+                const b = Math.max(0, i - (d.ahorroManual || 0));
+                const fij = d.gastosFijos?.reduce((s, g) => s + (parseFloat(g.valor) || 0), 0) || 0;
+                const var_ = d.gastosVariables?.reduce((s, g) => s + (parseFloat(g.valor) || 0), 0) || 0;
+                const rem = Math.max(0, (b * ((data.config.pNec + data.config.pDes) / 100)) - (fij + var_));
+                return { month: m, total: (d.ahorroManual || 0) + (b * (data.config.pAho / 100)) + rem };
+            });
+
+            const categoryData = useMemo(() => {
+                const counts = {};
+                TAGS.forEach(tag => counts[tag] = 0);
+                cur.gastosVariables?.forEach(g => counts[g.tag] = (counts[g.tag] || 0) + (parseFloat(g.valor) || 0));
+                return Object.keys(counts).map(tag => ({ name: tag, value: counts[tag] })).filter(d => d.value > 0);
+            }, [cur]);
+
+            const syncToSheets = async () => {
+                if (!scriptUrl) return;
+                setSyncStatus('loading');
+                try {
+                    await fetch(scriptUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) });
+                    setSyncStatus('success');
+                    setTimeout(() => setSyncStatus('idle'), 2000);
+                } catch (e) { setSyncStatus('error'); }
+            };
+
+            const loadFromSheets = async () => {
+                if (!scriptUrl) return;
+                setSyncStatus('loading');
+                try {
+                    const res = await fetch(scriptUrl);
+                    const cloud = await res.json();
+                    if (cloud.monthly) setData(cloud);
+                    setSyncStatus('success');
+                } catch (e) { setSyncStatus('error'); }
+                setTimeout(() => setSyncStatus('idle'), 2000);
+            };
+
+            return (
+                <div className={`flex h-screen transition-all ${isMobileMode ? 'justify-center items-center p-2 bg-slate-200' : ''}`}>
+                    
+                    {/* Floating Toggle View Button */}
+                    <button 
+                        onClick={() => { setIsMobileMode(!isMobileMode); setShowMonthSelector(false); }} 
+                        className="fixed bottom-6 right-6 z-[100] bg-indigo-600 text-white p-4 rounded-2xl shadow-xl hover:bg-indigo-700 transition-all flex items-center gap-2"
+                    >
+                        {isMobileMode ? <Icons.Monitor /> : <Icons.Smartphone />}
+                        <span className="text-[10px] font-bold uppercase tracking-widest hidden md:block">
+                            {isMobileMode ? 'Vista PC' : 'Vista Móvil'}
+                        </span>
+                    </button>
+
+                    {/* Desktop Sidebar */}
+                    {!isMobileMode && (
+                        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
+                            <div className="p-8 border-b border-slate-50 flex items-center gap-3">
+                                <div className="bg-indigo-600 p-1.5 rounded-lg text-white shadow-md shadow-indigo-100"><Icons.Wallet /></div>
+                                <h1 className="font-bold text-lg tracking-tight text-slate-800 tracking-tighter italic">FinanceApp</h1>
+                            </div>
+                            <nav className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
+                                <button onClick={() => setActiveTab('Ahorros')} className={`w-full text-left px-4 py-3 rounded-xl transition-all font-semibold ${activeTab==='Ahorros'?'bg-indigo-50 text-indigo-600':'text-slate-400'}`}>Bóveda</button>
+                                <button onClick={() => setActiveTab('Préstamos')} className={`w-full text-left px-4 py-3 rounded-xl transition-all font-semibold ${activeTab==='Préstamos'?'bg-indigo-50 text-indigo-600':'text-slate-400'}`}>Deudas</button>
+                                <div className="pt-6 pb-2 px-4 text-[9px] font-bold text-slate-300 uppercase tracking-widest">Nube</div>
+                                <div className="px-4 pb-4 space-y-2">
+                                    <input type="text" placeholder="URL Script" className="w-full text-[9px] p-2 bg-slate-50 border rounded outline-none focus:bg-white" value={scriptUrl} onChange={e => {setScriptUrl(e.target.value); localStorage.setItem('finance_url', e.target.value);}} />
+                                    <div className="flex gap-1">
+                                        <button onClick={syncToSheets} className="flex-1 bg-slate-900 text-white text-[8px] p-1.5 rounded font-bold">GUARDAR</button>
+                                        <button onClick={loadFromSheets} className="flex-1 bg-white border text-[8px] p-1.5 rounded font-bold">CARGAR</button>
+                                    </div>
+                                </div>
+                                <div className="p-4 text-[9px] font-bold text-slate-300 uppercase tracking-widest border-t border-slate-50">Calendario</div>
+                                {MONTHS.map(m => (
+                                    <button key={m} onClick={() => setActiveTab(m)} className={`w-full text-left px-4 py-2 rounded-lg transition-all text-xs ${activeTab===m?'bg-slate-800 text-white shadow-md':'text-slate-400 hover:bg-slate-50'}`}>{m}</button>
+                                ))}
+                            </nav>
+                        </aside>
+                    )}
+
+                    {/* Main Content Area */}
+                    <div className={`flex-1 flex flex-col transition-all duration-500 ${isMobileMode ? 'max-w-[375px] max-h-[760px] w-full h-full bg-white rounded-3xl border-[10px] border-slate-900 shadow-2xl overflow-hidden relative' : 'overflow-hidden'}`}>
+                        {isMobileMode && (
+                            <header className="bg-white px-6 pt-10 pb-4 border-b border-slate-100 flex justify-between items-center sticky top-0 z-50">
+                                <h2 className="font-bold text-slate-800 uppercase text-xs tracking-widest italic">{activeTab}</h2>
+                                <button onClick={syncToSheets} className="bg-indigo-50 p-2 rounded-lg text-indigo-600"><Icons.Cloud /></button>
+                            </header>
+                        )}
+
+                        <main className={`flex-1 overflow-y-auto custom-scrollbar ${isMobileMode ? 'p-5 pb-24' : 'p-10 lg:p-16'}`}>
+                            {activeTab === 'Ahorros' && (
+                                <div className="space-y-8 fade-in">
+                                    <div className="bg-indigo-600 p-8 rounded-2xl text-white shadow-xl">
+                                        <span className="text-[10px] font-bold uppercase opacity-60">Capital Acumulado Anual</span>
+                                        <h2 className="text-4xl font-bold mt-1 tracking-tighter">{fmt(savings.reduce((s, a) => s + a.total, 0))}</h2>
+                                    </div>
+                                    <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="bg-slate-50 text-slate-400 font-bold uppercase text-[9px]">
+                                                <tr><th className="p-4">Mes</th><th className="p-4 text-right">Ahorro</th></tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50">
+                                                {savings.map(s => (
+                                                    <tr key={s.month}>
+                                                        <td className="p-4 font-semibold text-slate-600">{s.month}</td>
+                                                        <td className="p-4 text-right font-bold text-emerald-600">{fmt(s.total)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'Préstamos' && (
+                                <div className="space-y-8 fade-in">
+                                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                                        <h3 className="font-bold text-sm text-slate-800">Registrar Nueva Deuda</h3>
+                                        <form onSubmit={e => {e.preventDefault(); addLoan(e.target.n.value, e.target.m.value); e.target.reset();}} className="flex gap-2">
+                                            <input name="n" placeholder="Deudor" className="flex-1 text-xs p-2 bg-slate-50 border border-slate-100 rounded-lg outline-none focus:bg-white" required />
+                                            <input name="m" type="number" step="0.01" placeholder="Monto €" className="w-24 text-xs p-2 bg-slate-50 border border-slate-100 rounded-lg outline-none focus:bg-white" required />
+                                            <button className="bg-indigo-600 text-white px-4 rounded-lg text-[10px] font-bold">OK</button>
+                                        </form>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {data.loans.map(l => (
+                                            <div key={l.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${l.pagado?'opacity-50 bg-slate-50':'bg-white border-slate-100 shadow-sm'}`}>
+                                                <div className="flex items-center gap-3">
+                                                    <button onClick={() => toggleLoan(l.id)} className={`w-8 h-8 rounded-lg flex items-center justify-center ${l.pagado?'bg-emerald-100 text-emerald-600':'bg-amber-50 text-amber-600'}`}>
+                                                        {l.pagado ? '✓' : '⏰'}
+                                                    </button>
+                                                    <div>
+                                                        <p className={`text-xs font-semibold text-slate-700 ${l.pagado?'line-through':''}`}>{l.nombre}</p>
+                                                        <p className="text-[8px] text-slate-400 uppercase font-bold">{l.fecha}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <span className="text-xs font-bold text-slate-800">{fmt(l.monto)}</span>
+                                                    <button onClick={() => deleteLoan(l.id)} className="text-slate-300 hover:text-rose-500 p-1"><Icons.Trash /></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {MONTHS.includes(activeTab) && (
+                                <div className="space-y-12 fade-in">
+                                    <header className="flex justify-between items-end border-b border-slate-100 pb-8">
+                                        <div><h2 className="text-4xl font-light text-slate-800 tracking-tighter">{activeTab}</h2></div>
+                                        <div className="text-right">
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Disponible Real</span>
+                                            <div className={`text-2xl font-bold ${disp<0?'text-rose-500':'text-indigo-600'}`}>{fmt(disp)}</div>
+                                        </div>
+                                    </header>
+
+                                    {/* Ingresos */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        {[{l:'Sueldo',k:'salario'},{l:'Extras',k:'entradas'},{l:'Mes Anterior',k:'mesPasado'},{l:'Préstamo',k:'prestado'}].map(i => (
+                                            <div key={i.k} className="space-y-2">
+                                                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">{i.l}</label>
+                                                <div className="flex items-center border-b border-slate-200 focus-within:border-indigo-400 transition-all pb-2">
+                                                    <span className="text-slate-300 text-sm mr-2">€</span>
+                                                    <input type="number" className="bg-transparent w-full text-base font-semibold outline-none text-slate-700" value={cur[i.k] || ''} onChange={e=>updateMonth(activeTab,i.k,e.target.value)} />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Ahorro Manual */}
+                                    <div className="bg-slate-900 p-8 rounded-2xl text-white flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
+                                        <div className="flex items-center gap-4 relative z-10">
+                                            <div className="bg-white/10 p-4 rounded-xl text-indigo-400"><Icons.Piggy /></div>
+                                            <div><h4 className="font-bold text-base">Ahorro Manual</h4><p className="text-indigo-200 text-xs opacity-50 font-light">Se deduce antes de presupuestos.</p></div>
+                                        </div>
+                                        <div className="flex items-center gap-4 border-b border-white/20 pb-2 min-w-[150px] relative z-10">
+                                            <span className="text-indigo-400 font-bold text-2xl">€</span>
+                                            <input type="number" className="bg-transparent outline-none font-bold text-3xl w-full text-center" placeholder="0.00" value={cur.ahorroManual || ''} onChange={e=>updateMonth(activeTab,'ahorroManual',e.target.value)} />
+                                        </div>
+                                    </div>
+
+                                    {/* Distribución */}
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                                        <div className="lg:col-span-2 space-y-8 bg-white p-8 rounded-2xl border border-slate-100 shadow-sm">
+                                            <div className="flex justify-between items-center">
+                                                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Regla de Distribución (%)</h3>
+                                                {!isConfigValid && <span className="text-rose-500 text-[10px] font-bold animate-pulse uppercase tracking-tighter">Suma incorrecta</span>}
+                                            </div>
+                                            <div className="space-y-10">
+                                                {[{l:'Necesidades',k:'pNec',v:vNec},{l:'Deseos',k:'pDes',v:vDes},{l:'Extra Ahorro',k:'pAho',v:vAho}].map(i => (
+                                                    <div key={i.k} className="space-y-3">
+                                                        <div className="flex justify-between text-[11px] font-medium uppercase tracking-tighter">
+                                                            <span className="text-slate-400">{i.l} ({data.config[i.k]}%)</span>
+                                                            <span className="text-slate-800 font-bold">{fmt(i.v)}</span>
+                                                        </div>
+                                                        <input type="range" min="0" max="100" className="w-full h-1 bg-slate-100 rounded-lg cursor-pointer" value={data.config[i.k]} onChange={e=>updateConfig(i.k,e.target.value)} />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col items-center justify-center p-4">
+                                            <div className="h-60 w-full relative">
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 text-center pointer-events-none">
+                                                    <span className={`text-3xl font-black tracking-tighter ${disp<0?'text-rose-500':'text-slate-800'}`}>{fmt(disp)}</span>
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Disponible</span>
+                                                </div>
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <PieChart>
+                                                        <Pie data={[{v:totalGastadoTotal,fill:disp<0?'#fecdd3':'#e0e7ff'}, {v:Math.max(0, disp), fill:'#6366f1'}]} innerRadius={75} outerRadius={95} paddingAngle={0} dataKey="v" stroke="none" startAngle={90} endAngle={450} />
+                                                    </PieChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Tablas de Gastos */}
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                                        <div className="space-y-6">
+                                            <div className="flex justify-between items-center border-b pb-4 border-slate-100"><h3 className="font-bold text-sm text-slate-400 uppercase tracking-widest">Fijos</h3><button onClick={()=>addGasto(activeTab,'gastosFijos')} className="text-indigo-600 hover:scale-110 transition-transform"><Icons.Plus /></button></div>
+                                            <div className="space-y-4">
+                                                {cur.gastosFijos?.map(g => (
+                                                    <div key={g.id} className="flex gap-4 items-center group">
+                                                        <input className="flex-1 bg-transparent text-xs font-medium outline-none focus:border-b border-indigo-100" value={g.nombre} onChange={e=>updateGasto(activeTab,'gastosFijos',g.id,'nombre',e.target.value)} placeholder="Concepto..." />
+                                                        <div className="flex items-center border-b border-slate-200 w-28"><span className="text-slate-300 text-xs mr-2">€</span><input type="number" className="w-full bg-transparent text-xs font-bold outline-none text-right" value={g.valor || ''} onChange={e=>updateGasto(activeTab,'gastosFijos',g.id,'valor',e.target.value)} placeholder="0" /></div>
+                                                        <button onClick={()=>deleteGasto(activeTab,'gastosFijos',g.id)} className="text-slate-200 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Icons.Trash /></button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="space-y-6">
+                                            <div className="flex justify-between items-center border-b pb-4 border-slate-100"><h3 className="font-bold text-sm text-slate-400 uppercase tracking-widest">Variables</h3><button onClick={()=>addGasto(activeTab,'gastosVariables')} className="text-indigo-600 hover:scale-110 transition-transform"><Icons.Plus /></button></div>
+                                            <div className="space-y-6">
+                                                {cur.gastosVariables?.map(g => (
+                                                    <div key={g.id} className="flex flex-col gap-2 group p-4 bg-white border border-slate-100 rounded-xl hover:shadow-md transition-all">
+                                                        <div className="flex justify-between items-center">
+                                                            <select className="text-[9px] font-bold uppercase text-indigo-500 bg-indigo-50 px-2 py-1 rounded outline-none" value={g.tag} onChange={e=>updateGasto(activeTab,'gastosVariables',g.id,'tag',e.target.value)}>{TAGS.map(t=><option key={t}>{t}</option>)}</select>
+                                                            <button onClick={()=>deleteGasto(activeTab,'gastosVariables',g.id)} className="text-slate-200 hover:text-rose-500"><Icons.Trash /></button>
+                                                        </div>
+                                                        <div className="flex gap-4">
+                                                            <input className="flex-1 bg-transparent text-xs font-medium outline-none" value={g.nombre} onChange={e=>updateGasto(activeTab,'gastosVariables',g.id,'nombre',e.target.value)} placeholder="¿Qué compraste?" />
+                                                            <div className="flex items-center border-b border-slate-200 w-28"><span className="text-slate-300 text-xs mr-2">€</span><input type="number" className="w-full bg-transparent text-xs font-bold outline-none text-right" value={g.valor || ''} onChange={e=>updateGasto(activeTab,'gastosVariables',g.id,'valor',e.target.value)} placeholder="0" /></div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Gráfico de Etiquetas */}
+                                    {categoryData.length > 0 && (
+                                        <div className="bg-white p-10 rounded-2xl border border-slate-100 shadow-sm space-y-10">
+                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><Icons.Tag /> Desglose de Gastos Variables</h3>
+                                            <div className="h-[300px] w-full">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={categoryData} layout="vertical" margin={{ left: 10, right: 60 }}>
+                                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                                        <XAxis type="number" hide />
+                                                        <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} fontSize={10} width={70} tick={{ fill: '#64748B', fontWeight: 'bold' }} />
+                                                        <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ border: 'none', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} />
+                                                        <Bar dataKey="value" radius={[0, 10, 10, 0]} barSize={25}>
+                                                            {categoryData.map((e,idx)=>(<Cell key={idx} fill={COLORS[idx % COLORS.length]} />))}
+                                                            <LabelList dataKey="value" position="right" formatter={(v)=>fmt(v)} style={{ fontWeight: '600', fontSize: '11px', fill: '#1e293b' }} />
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </main>
+
+                        {/* Barra Navegación Móvil */}
+                        {isMobileMode && (
+                            <nav className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-100 h-24 flex justify-around items-center px-4 pb-8 z-50">
+                                <button onClick={() => {setActiveTab('Ahorros'); setShowMonthSelector(false);}} className={`flex flex-col items-center gap-1.5 flex-1 transition-all ${activeTab==='Ahorros'?'text-indigo-600 scale-110 font-bold':'text-slate-300'}`}><Icons.Wallet /><span className="text-[9px] uppercase font-bold tracking-tighter">Bóveda</span></button>
+                                <div className="flex-1 flex justify-center">
+                                    <button onClick={() => setShowMonthSelector(!showMonthSelector)} className={`bg-slate-900 text-white p-5 rounded-2xl shadow-xl active:scale-90 transition-all border-4 border-white -translate-y-10 ${showMonthSelector?'bg-indigo-600 rotate-180':''}`}><Icons.Calendar /></button>
+                                    {showMonthSelector && (
+                                        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 grid grid-cols-3 gap-3 w-72 z-[200] animate-in zoom-in duration-300 z-[100]">
+                                            {MONTHS.map(m => <button key={m} onClick={()=>{setActiveTab(m);setShowMonthSelector(false)}} className={`p-3 text-[10px] font-bold rounded-xl uppercase transition-colors ${activeTab===m?'bg-indigo-600 text-white':'bg-slate-50 text-slate-500'}`}>{m.slice(0,3)}</button>)}
+                                        </div>
+                                    )}
+                                </div>
+                                <button onClick={() => {setActiveTab('Préstamos'); setShowMonthSelector(false);}} className={`flex flex-col items-center gap-1.5 flex-1 transition-all ${activeTab==='Préstamos'?'text-indigo-600 scale-110 font-bold':'text-slate-300'}`}><Icons.Loans /><span className="text-[9px] uppercase font-bold tracking-tighter">Deudas</span></button>
+                            </nav>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
