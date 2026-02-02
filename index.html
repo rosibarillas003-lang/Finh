@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Elite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.10.3/umd/Recharts.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; background-color: #f8fafc; color: #334155; }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+        const { PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, BarChart, Bar, CartesianGrid, LabelList } = Recharts;
+
+        const Icons = {
+            Wallet: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>,
+            Piggy: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1 .5-1.5 1-2V5Z"/><path d="M12 2v4"/></svg>,
+            Loans: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m11 15-3-3 3-3"/><path d="m15 9 3 3-3 3"/><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M12 5v14"/></svg>,
+            Plus: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+            Trash: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+            Cloud: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.5 19c2.5 0 4.5-2 4.5-4.5 0-2-1.3-3.7-3.1-4.2C18.4 6.2 14.8 3 10.5 3 6.7 3 3.5 5.5 2.4 9 1 9.9 0 11.5 0 13.3c0 2 1.6 3.7 3.6 3.7h13.9Z"/></svg>
+        };
+
+        const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const TAGS = ['Belleza', 'Salidas', 'Efectivo', 'Compras', 'Uber', 'Comida'];
+        const COLORS = ['#6366f1', '#db2777', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6'];
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('Enero');
+            const [isMobileMode, setIsMobileMode] = useState(false);
+            const [showMonthSelector, setShowMonthSelector] = useState(false);
+            const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('finance_url') || '');
+            const [data, setData] = useState({
+                config: { pNec: 50, pDes: 30, pAho: 20 },
+                loans: [],
+                monthly: MONTHS.reduce((acc, month) => {
+                    acc[month] = { salario: 0, entradas: 0, mesPasado: 0, prestado: 0, ahorroManual: 0, gastosFijos: [], gastosVariables: [] };
+                    return acc;
+                }, {})
+            });
+
+            const updateMonth = (m, f, v) => setData(p => ({...p, monthly: {...p.monthly, [m]: {...p.monthly[m], [f]: parseFloat(v) || 0}}}));
+            const updateConfig = (f, v) => setData(p => ({...p, config: {...p.config, [f]: parseInt(v) || 0}}));
+            const addLoan = (n, m) => setData(p => ({...p, loans: [{id:Date.now(),nombre:n,monto:parseFloat(m),pagado:false,fecha:new Date().toLocaleDateString()}, ...p.loans]}));
+            const toggleLoan = (id) => setData(p => ({...p, loans: p.loans.map(l => l.id === id ? {...l, pagado: !l.pagado} : l)}));
+            const addGasto = (m, t) => setData(p => ({...p, monthly: {...p.monthly, [m]: {...p.monthly[m], [t]: [...p.monthly[m][t], {id:Date.now(),nombre:'',valor:0,tag:TAGS[0]}]}}}));
+            const updateGasto = (m, t, id, f, v) => setData(p => ({...p, monthly: {...p.monthly, [m]: {...p.monthly[m], [t]: p.monthly[m][t].map(i => i.id === id ? {...i, [f]: f==='valor'?parseFloat(v)||0:v} : i)}}}));
+            const deleteGasto = (m, t, id) => setData(p => ({...p, monthly: {...p.monthly, [m]: {...p.monthly[m], [t]: p.monthly[m][t].filter(i => i.id !== id)}}}));
+
+            const cur = data.monthly[activeTab] || {};
+            const ing = (cur.salario || 0) + (cur.entradas || 0) + (cur.mesPasado || 0) + (cur.prestado || 0);
+            const base = Math.max(0, ing - (cur.ahorroManual || 0));
+            const vNec = base * (data.config.pNec / 100);
+            const vDes = base * (data.config.pDes / 100);
+            const vAho = base * (data.config.pAho / 100);
+            const gFij = cur.gastosFijos?.reduce((s, g) => s + (g.valor || 0), 0) || 0;
+            const gVar = cur.gastosVariables?.reduce((s, g) => s + (g.valor || 0), 0) || 0;
+            const disp = (vNec + vDes) - (gFij + gVar);
+
+            const savings = MONTHS.map(m => {
+                const d = data.monthly[m];
+                const i = (d.salario || 0) + (d.entradas || 0) + (d.mesPasado || 0) + (d.prestado || 0);
+                const b = Math.max(0, i - (d.ahorroManual || 0));
+                const rem = Math.max(0, (b * ((data.config.pNec + data.config.pDes) / 100)) - ((d.gastosFijos?.reduce((s, g) => s + g.valor, 0) || 0) + (d.gastosVariables?.reduce((s, g) => s + g.valor, 0) || 0)));
+                return { month: m, total: (d.ahorroManual || 0) + (b * (data.config.pAho / 100)) + rem };
+            });
+
+            return (
+                <div className={`flex h-screen transition-all ${isMobileMode ? 'justify-center items-center p-4 bg-slate-200' : ''}`}>
+                    <button onClick={() => setIsMobileMode(!isMobileMode)} className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white p-3 rounded-xl shadow-lg hover:bg-indigo-700">
+                        {isMobileMode ? <Icons.Wallet /> : <Icons.Piggy />}
+                    </button>
+
+                    {!isMobileMode && (
+                        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
+                            <div className="p-8 border-b border-slate-50 flex items-center gap-2">
+                                <div className="bg-indigo-600 p-1.5 rounded-lg text-white"><Icons.Wallet /></div>
+                                <h1 className="font-bold text-slate-800 uppercase text-xs tracking-widest">Finance</h1>
+                            </div>
+                            <nav className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
+                                <button onClick={() => setActiveTab('Ahorros')} className={`w-full text-left px-4 py-2 rounded-lg text-xs font-semibold ${activeTab==='Ahorros'?'bg-indigo-50 text-indigo-600':'text-slate-400'}`}>Bóveda</button>
+                                <button onClick={() => setActiveTab('Préstamos')} className={`w-full text-left px-4 py-2 rounded-lg text-xs font-semibold ${activeTab==='Préstamos'?'bg-indigo-50 text-indigo-600':'text-slate-400'}`}>Deudas</button>
+                                <div className="p-4 text-[9px] font-bold text-slate-300 uppercase tracking-widest">Meses</div>
+                                {MONTHS.map(m => (
+                                    <button key={m} onClick={() => setActiveTab(m)} className={`w-full text-left px-4 py-2 rounded-lg text-xs ${activeTab===m?'bg-slate-800 text-white':'text-slate-400 hover:bg-slate-50'}`}>{m}</button>
+                                ))}
+                            </nav>
+                        </aside>
+                    )}
+
+                    <div className={`flex-1 flex flex-col transition-all duration-500 ${isMobileMode ? 'max-w-[375px] max-h-[760px] w-full h-full bg-white rounded-3xl border-[10px] border-slate-900 shadow-2xl overflow-hidden relative' : 'overflow-hidden'}`}>
+                        <main className={`flex-1 overflow-y-auto custom-scrollbar ${isMobileMode ? 'p-5 pb-24' : 'p-10 lg:p-16'}`}>
+                            {activeTab === 'Ahorros' && (
+                                <div className="space-y-8 fade-in">
+                                    <div className="bg-indigo-600 p-8 rounded-2xl text-white shadow-xl">
+                                        <span className="text-[10px] font-bold uppercase opacity-60">Capital Acumulado Anual</span>
+                                        <h2 className="text-4xl font-bold mt-1 tracking-tighter">{fmt(savings.reduce((s, a) => s + a.total, 0))}</h2>
+                                    </div>
+                                    <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="bg-slate-50 text-slate-400 font-bold uppercase text-[9px]">
+                                                <tr><th className="p-4">Mes</th><th className="p-4 text-right">Ahorro</th></tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50">
+                                                {savings.map(s => <tr key={s.month}><td className="p-4 font-semibold">{s.month}</td><td className="p-4 text-right font-bold text-emerald-600">{fmt(s.total)}</td></tr>)}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {MONTHS.includes(activeTab) && (
+                                <div className="space-y-8 fade-in">
+                                    <header className="flex justify-between items-center border-b border-slate-50 pb-6">
+                                        <h2 className="text-3xl font-bold text-slate-800">{activeTab}</h2>
+                                        <div className="text-right">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase block">Disponible Real</span>
+                                            <span className={`text-xl font-bold ${disp<0?'text-rose-500':'text-emerald-500'}`}>{fmt(disp)}</span>
+                                        </div>
+                                    </header>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                        {[{l:'Sueldo',k:'salario'},{l:'Extra',k:'entradas'},{l:'Pasado',k:'mesPasado'},{l:'Prest.',k:'prestado'}].map(i => (
+                                            <div key={i.k} className="bg-white p-4 rounded-xl border border-slate-100">
+                                                <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{i.l}</label>
+                                                <div className="flex items-center gap-1 font-bold text-slate-800">
+                                                    <span>€</span><input type="number" className="bg-transparent w-full outline-none" value={cur[i.k] || ''} onChange={e=>updateMonth(activeTab,i.k,e.target.value)} />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="bg-slate-900 p-6 rounded-2xl text-white flex justify-between items-center">
+                                        <div><h4 className="font-bold text-sm">Ahorro Manual</h4><p className="text-[10px] opacity-40 italic">Se resta primero.</p></div>
+                                        <div className="flex items-center gap-2 bg-white/5 p-3 rounded-lg border border-white/10">
+                                            <span className="text-indigo-400 font-bold">€</span>
+                                            <input type="number" className="bg-transparent outline-none font-bold text-xl w-24 text-center" value={cur.ahorroManual || ''} onChange={e=>updateMonth(activeTab,'ahorroManual',e.target.value)} />
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+                                        <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Distribución (%)</h3>
+                                        <div className="space-y-6">
+                                            {[{l:'Fijos',k:'pNec',c:'accent-indigo-600',v:vNec},{l:'Variables',k:'pDes',c:'accent-pink-600',v:vDes},{l:'Extra (Aho)',k:'pAho',c:'accent-emerald-600',v:vAho}].map(i => (
+                                                <div key={i.k} className="flex flex-col sm:flex-row items-center gap-4">
+                                                    <div className="w-24 text-[10px] font-bold uppercase">{i.l} ({data.config[i.k]}%)</div>
+                                                    <input type="range" min="0" max="100" className={`flex-1 h-1.5 rounded-lg ${i.c}`} value={data.config[i.k]} onChange={e=>updateConfig(i.k,e.target.value)} />
+                                                    <div className="w-24 text-right font-bold text-slate-800 text-xs">{fmt(i.v)}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                        <div className="bg-white p-6 rounded-2xl border border-slate-100">
+                                            <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-sm">Gastos Fijos</h3><button onClick={()=>addGasto(activeTab,'gastosFijos')} className="p-1.5 bg-slate-100 rounded-lg"><Icons.Plus /></button></div>
+                                            <div className="space-y-3">
+                                                {cur.gastosFijos?.map(g => (
+                                                    <div key={g.id} className="flex gap-2 items-center bg-slate-50 p-2 rounded-lg">
+                                                        <input className="flex-1 bg-transparent text-xs font-medium outline-none" value={g.nombre} onChange={e=>updateGasto(activeTab,'gastosFijos',g.id,'nombre',e.target.value)} placeholder="¿Qué es?" />
+                                                        <input type="number" className="w-20 bg-white border border-slate-200 rounded px-2 py-1 text-xs font-bold" value={g.valor || ''} onChange={e=>updateGasto(activeTab,'gastosFijos',g.id,'valor',e.target.value)} />
+                                                        <button onClick={()=>deleteGasto(activeTab,'gastosFijos',g.id)} className="text-slate-300 hover:text-rose-500"><Icons.Trash /></button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="bg-white p-6 rounded-2xl border border-slate-100">
+                                            <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-sm">Gastos Variables</h3><button onClick={()=>addGasto(activeTab,'gastosVariables')} className="p-1.5 bg-slate-100 rounded-lg"><Icons.Plus /></button></div>
+                                            <div className="space-y-3">
+                                                {cur.gastosVariables?.map(g => (
+                                                    <div key={g.id} className="flex flex-col gap-2 bg-slate-50 p-3 rounded-lg">
+                                                        <div className="flex justify-between items-center">
+                                                            <select className="text-[9px] font-bold uppercase bg-indigo-100 text-indigo-700 px-2 py-1 rounded" value={g.tag} onChange={e=>updateGasto(activeTab,'gastosVariables',g.id,'tag',e.target.value)}>{TAGS.map(t=><option key={t}>{t}</option>)}</select>
+                                                            <button onClick={()=>deleteGasto(activeTab,'gastosVariables',g.id)} className="text-slate-300 hover:text-rose-500"><Icons.Trash /></button>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <input className="flex-1 bg-transparent text-xs font-medium outline-none" value={g.nombre} onChange={e=>updateGasto(activeTab,'gastosVariables',g.id,'nombre',e.target.value)} placeholder="Concepto" />
+                                                            <input type="number" className="w-20 bg-white border border-slate-200 rounded px-2 py-1 text-xs font-bold" value={g.valor || ''} onChange={e=>updateGasto(activeTab,'gastosVariables',g.id,'valor',e.target.value)} />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </main>
+
+                        {isMobileMode && (
+                            <nav className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 h-20 flex justify-around items-center px-4 pb-4">
+                                <button onClick={() => setActiveTab('Ahorros')} className={`flex flex-col items-center gap-1 ${activeTab==='Ahorros'?'text-indigo-600 font-bold':'text-slate-300'}`}><Icons.Wallet /><span className="text-[8px] uppercase font-bold">Bóveda</span></button>
+                                <button onClick={() => setShowMonthSelector(!showMonthSelector)} className="bg-slate-900 text-white p-3 rounded-2xl shadow-xl -translate-y-4"><Icons.Calendar /></button>
+                                <button onClick={() => setActiveTab('Préstamos')} className={`flex flex-col items-center gap-1 ${activeTab==='Préstamos'?'text-indigo-600 font-bold':'text-slate-300'}`}><Icons.Loans /><span className="text-[8px] uppercase font-bold">Deudas</span></button>
+                                {showMonthSelector && (
+                                    <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-white rounded-2xl p-4 shadow-2xl border border-slate-100 grid grid-cols-3 gap-2 w-64 animate-in zoom-in">
+                                        {MONTHS.map(m => <button key={m} onClick={()=>{setActiveTab(m);setShowMonthSelector(false)}} className={`p-2 text-[10px] font-bold rounded-lg ${activeTab===m?'bg-indigo-600 text-white':'bg-slate-50'}`}>{m.slice(0,3)}</button>)}
+                                    </div>
+                                )}
+                            </nav>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
